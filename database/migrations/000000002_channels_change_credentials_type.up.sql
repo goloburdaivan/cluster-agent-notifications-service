@@ -1,0 +1,1 @@
+ALTER TABLE channels ALTER COLUMN credentials TYPE TEXT;

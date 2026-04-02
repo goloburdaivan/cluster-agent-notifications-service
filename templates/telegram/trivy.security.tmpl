@@ -1,0 +1,15 @@
+<b>🚨 Trivy Security Report</b>
+Resource: <code>{{ .ReportName }}</code>
+Namespace: <code>{{ .Namespace }}</code>
+
+⚠️ Total vulnerabilities: <b>{{ .TotalCount }}</b>
+{{ if .IsTruncated }}<i>(Showing first 15 only)</i>{{ end }}
+
+{{ range .Vulnerabilities }}
+{{ if eq .Severity "CRITICAL" }}🔴{{ else if eq .Severity "HIGH" }}🟠{{ else }}🟡{{ end }} <b>{{ .Severity }}</b>: <code>{{ .VulnerabilityID }}</code>
+📦 Package: <b>{{ .PkgName }}</b> (<i>{{ .InstalledVersion }}</i>)
+{{ end }}
+
+{{ if .IsTruncated }}
+👉 Check your security dashboard for the full report.
+{{ end }}
