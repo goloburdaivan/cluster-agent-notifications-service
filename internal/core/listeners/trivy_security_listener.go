@@ -3,6 +3,7 @@ package listeners
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"notifications-service/internal/core/domain"
 	"notifications-service/internal/core/ports"
 )
@@ -27,14 +28,12 @@ func NewSecurityHandler(
 }
 
 func (sh *SecurityHandler) Handle(ctx context.Context, event domain.NotificationEnvelope) error {
-	var payload domain.TrivyReportPayload
+	var payload domain.TrivyVulnerability
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
 
-	totalCount := len(payload.Vulnerabilities)
-
-	if totalCount > maxVulns {
+	if len(payload.Vulnerabilities) > maxVulns {
 		payload.Vulnerabilities = payload.Vulnerabilities[:maxVulns]
 	}
 
@@ -43,18 +42,11 @@ func (sh *SecurityHandler) Handle(ctx context.Context, event domain.Notification
 		return err
 	}
 
-	templateData := struct {
-		domain.TrivyReportPayload
-		TotalCount  int
-		IsTruncated bool
-	}{
-		TrivyReportPayload: payload,
-		TotalCount:         totalCount,
-		IsTruncated:        totalCount > maxVulns,
-	}
-
 	for _, channel := range channels {
-		_ = sh.notificationRouter.RouteAndSend(ctx, channel, event.EventType, templateData)
+		err = sh.notificationRouter.RouteAndSend(ctx, channel, event.EventType, payload)
+		if err != nil {
+			return fmt.Errorf("notification router error: %w", err)
+		}
 	}
 
 	return nil

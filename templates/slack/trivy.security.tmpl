@@ -1,0 +1,19 @@
+:rotating_light: *Trivy Security Report*
+*Resource:* `{{ .ReportName }}`
+*Namespace:* `{{ .Namespace }}`
+{{ if .WorkloadKind }}*Workload:* `{{ .WorkloadKind }}/{{ .WorkloadName }}`{{ end }}
+{{ if .ContainerName }}*Container:* `{{ .ContainerName }}`{{ end }}
+
+:warning: *Severity summary:*
+{{ if .Critical }}:red_circle: Critical: *{{ .Critical }}*{{ end }}
+{{ if .High }}:large_orange_circle: High: *{{ .High }}*{{ end }}
+{{ if .Medium }}:large_yellow_circle: Medium: *{{ .Medium }}*{{ end }}
+{{ if .Low }}:white_circle: Low: *{{ .Low }}*{{ end }}
+
+{{ range .Vulnerabilities }}
+{{ if eq .Severity "CRITICAL" }}:red_circle:{{ else if eq .Severity "HIGH" }}:large_orange_circle:{{ else }}:large_yellow_circle:{{ end }} *{{ .Severity }}*: `{{ .VulnerabilityID }}`
+:package: Package: *{{ .PkgName }}* (_{{ .InstalledVersion }}_)
+{{ if .FixedVersion }}:wrench: Fixed in: `{{ .FixedVersion }}`{{ end }}
+{{ end }}
+
+:point_right: Check your security dashboard for the full report.

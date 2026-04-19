@@ -1,15 +1,19 @@
 <b>🚨 Trivy Security Report</b>
 Resource: <code>{{ .ReportName }}</code>
 Namespace: <code>{{ .Namespace }}</code>
+{{ if .WorkloadKind }}Workload: <code>{{ .WorkloadKind }}/{{ .WorkloadName }}</code>{{ end }}
+{{ if .ContainerName }}Container: <code>{{ .ContainerName }}</code>{{ end }}
 
-⚠️ Total vulnerabilities: <b>{{ .TotalCount }}</b>
-{{ if .IsTruncated }}<i>(Showing first 15 only)</i>{{ end }}
+⚠️ Severity summary:
+{{ if .Critical }}🔴 Critical: <b>{{ .Critical }}</b>{{ end }}
+{{ if .High }}🟠 High: <b>{{ .High }}</b>{{ end }}
+{{ if .Medium }}🟡 Medium: <b>{{ .Medium }}</b>{{ end }}
+{{ if .Low }}⚪️ Low: <b>{{ .Low }}</b>{{ end }}
 
 {{ range .Vulnerabilities }}
 {{ if eq .Severity "CRITICAL" }}🔴{{ else if eq .Severity "HIGH" }}🟠{{ else }}🟡{{ end }} <b>{{ .Severity }}</b>: <code>{{ .VulnerabilityID }}</code>
 📦 Package: <b>{{ .PkgName }}</b> (<i>{{ .InstalledVersion }}</i>)
+{{ if .FixedVersion }}🔧 Fixed in: <code>{{ .FixedVersion }}</code>{{ end }}
 {{ end }}
 
-{{ if .IsTruncated }}
 👉 Check your security dashboard for the full report.
-{{ end }}

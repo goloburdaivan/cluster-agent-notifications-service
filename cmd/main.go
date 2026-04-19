@@ -24,6 +24,8 @@ import (
 	"notifications-service/internal/core/listeners"
 	"notifications-service/internal/core/services"
 
+	"notifications-service/internal/infra/clients/email"
+	"notifications-service/internal/infra/clients/slack"
 	"notifications-service/internal/infra/clients/telegram"
 	"notifications-service/internal/infra/pool"
 	"notifications-service/internal/infra/providers"
@@ -101,7 +103,14 @@ func main() {
 	}
 	tgClient := telegram.NewClient(telegram.WithHTTPClient(customHTTPClient))
 	telegramSender := providers.NewSender(tgClient, renderer)
-	notificationRouter := services.NewNotificationRouter(telegramSender)
+
+	slackClient := slack.NewClient(slack.WithHTTPClient(customHTTPClient))
+	slackSender := providers.NewSlackSender(slackClient, renderer)
+
+	emailClient := email.NewClient()
+	emailSender := providers.NewEmailSender(emailClient, renderer)
+
+	notificationRouter := services.NewNotificationRouter(telegramSender, slackSender, emailSender)
 	securityHandler := listeners.NewSecurityHandler(channelRepository, notificationRouter)
 
 	conn, err := amqp.Dial(os.Getenv("RABBIT_URL"))
