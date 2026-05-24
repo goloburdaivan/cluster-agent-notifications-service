@@ -114,43 +114,43 @@ func (c *emailClient) sendMail(addr string, cfg SMTPConfig, to string, msg []byt
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck,gosec
 		return fmt.Errorf("create SMTP client: %w", err)
 	}
-	defer client.Close()
+	defer client.Close() //nolint:errcheck
 
 	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
-			return fmt.Errorf("STARTTLS: %w", err)
+		if tlsErr := client.StartTLS(&tls.Config{ServerName: host}); tlsErr != nil {
+			return fmt.Errorf("STARTTLS: %w", tlsErr)
 		}
 	}
 
 	if cfg.Username != "" {
 		auth := smtp.PlainAuth("", cfg.Username, cfg.Password, host)
-		if err := client.Auth(auth); err != nil {
-			return fmt.Errorf("auth: %w", err)
+		if authErr := client.Auth(auth); authErr != nil {
+			return fmt.Errorf("auth: %w", authErr)
 		}
 	}
 
-	if err := client.Mail(cfg.From); err != nil {
-		return fmt.Errorf("mail from: %w", err)
+	if mailErr := client.Mail(cfg.From); mailErr != nil {
+		return fmt.Errorf("mail from: %w", mailErr)
 	}
 
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("rcpt to %s: %w", to, err)
+	if rcptErr := client.Rcpt(to); rcptErr != nil {
+		return fmt.Errorf("rcpt to %s: %w", to, rcptErr)
 	}
 
-	w, err := client.Data()
-	if err != nil {
-		return fmt.Errorf("data: %w", err)
+	w, dataErr := client.Data()
+	if dataErr != nil {
+		return fmt.Errorf("data: %w", dataErr)
 	}
 
-	if _, err := w.Write(msg); err != nil {
-		return fmt.Errorf("write body: %w", err)
+	if _, writeErr := w.Write(msg); writeErr != nil {
+		return fmt.Errorf("write body: %w", writeErr)
 	}
 
-	if err := w.Close(); err != nil {
-		return fmt.Errorf("close data: %w", err)
+	if closeErr := w.Close(); closeErr != nil {
+		return fmt.Errorf("close data: %w", closeErr)
 	}
 
 	return client.Quit()

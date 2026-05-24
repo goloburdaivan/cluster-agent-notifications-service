@@ -45,8 +45,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to DB:", err)
 	}
-	if err := db.Ping(ctx); err != nil {
-		log.Fatal("Failed to ping DB:", err)
+	if pingErr := db.Ping(ctx); pingErr != nil {
+		log.Fatal("Failed to ping DB:", pingErr)
 	}
 	defer db.Close()
 
@@ -77,13 +77,14 @@ func main() {
 	}
 
 	server := http.Server{
-		Addr:    ":8081",
-		Handler: router,
+		Addr:              ":8081",
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %s\n", err)
+		if listenErr := server.ListenAndServe(); listenErr != nil && !errors.Is(listenErr, http.ErrServerClosed) {
+			log.Fatalf("listen: %s\n", listenErr)
 		}
 	}()
 
@@ -117,7 +118,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to RabbitMQ:", err)
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck
 
 	notificationQueue := queue.NewRabbitQueue("notifications", conn)
 	defer func() {
@@ -138,7 +139,7 @@ func main() {
 	logger.Info("Shutting down gracefully...")
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("Failed to shutdown gracefully:", err)
+	if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {
+		slog.Error("Failed to shutdown gracefully", "error", shutdownErr)
 	}
 }

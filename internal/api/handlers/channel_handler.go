@@ -54,7 +54,7 @@ func mapToChannelResp(c domain.Channel) channelResp {
 func (h *ChannelHandler) Create(c *gin.Context) {
 	var req createChannelReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *ChannelHandler) Create(c *gin.Context) {
 
 	created, err := h.service.Create(c.Request.Context(), cmd)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
@@ -79,7 +79,7 @@ func (h *ChannelHandler) Get(c *gin.Context) {
 
 	channel, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (h *ChannelHandler) Get(c *gin.Context) {
 func (h *ChannelHandler) List(c *gin.Context) {
 	channels, err := h.service.List(c.Request.Context())
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 
 	var req updateChannelReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 
 	updated, err := h.service.Update(c.Request.Context(), cmd)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *ChannelHandler) Delete(c *gin.Context) {
 
 	err := h.service.Delete(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		_ = c.Error(err)
 		return
 	}
 

@@ -111,55 +111,64 @@ func (c *slackClient) PostMessage(ctx context.Context, botToken string, channelI
 	b.MaxElapsedTime = c.backoffCfg.MaxElapsedTime
 
 	operation := func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("create request: %w", err))
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		if reqErr != nil {
+			return backoff.Permanent(fmt.Errorf("create request: %w", reqErr))
 		}
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 		req.Header.Set("Authorization", "Bearer "+botToken)
 
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("execute request: %w", err)
-		}
-		defer resp.Body.Close()
-
-		respBody, _ := io.ReadAll(resp.Body)
-
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return fmt.Errorf("%w", ErrRateLimit)
+		resp, doErr := c.httpClient.Do(req)
+		if doErr != nil {
+			return fmt.Errorf("execute request: %w", doErr)
 		}
 
-		if resp.StatusCode >= 500 {
-			return fmt.Errorf("%w: %d", ErrUnexpected, resp.StatusCode)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return backoff.Permanent(fmt.Errorf("%w: %d %s", ErrUnexpected, resp.StatusCode, string(respBody)))
-		}
-
-		var apiResp apiResponse
-		if err := json.Unmarshal(respBody, &apiResp); err != nil {
-			return backoff.Permanent(fmt.Errorf("unmarshal response: %w", err))
-		}
-
-		if !apiResp.OK {
-			if isRetryableSlackError(apiResp.Error) {
-				return fmt.Errorf("%w: %s", ErrUnexpected, apiResp.Error)
-			}
-			if isAuthSlackError(apiResp.Error) {
-				return backoff.Permanent(fmt.Errorf("%w: %s", ErrAuth, apiResp.Error))
-			}
-			if apiResp.Error == "channel_not_found" {
-				return backoff.Permanent(fmt.Errorf("%w: %s", ErrChannelMissing, apiResp.Error))
-			}
-			return backoff.Permanent(fmt.Errorf("%w: %s", ErrUnexpected, apiResp.Error))
-		}
-
-		return nil
+		return c.handleResponse(resp)
 	}
 
 	return backoff.Retry(operation, backoff.WithContext(b, ctx))
+}
+
+func (c *slackClient) handleResponse(resp *http.Response) error {
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return fmt.Errorf("%w", ErrRateLimit)
+	}
+
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("%w: %d", ErrUnexpected, resp.StatusCode)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return backoff.Permanent(fmt.Errorf("%w: %d %s", ErrUnexpected, resp.StatusCode, string(respBody)))
+	}
+
+	var apiResp apiResponse
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
+		return backoff.Permanent(fmt.Errorf("unmarshal response: %w", err))
+	}
+
+	if !apiResp.OK {
+		return c.handleAPIError(apiResp.Error)
+	}
+
+	return nil
+}
+
+func (c *slackClient) handleAPIError(code string) error {
+	if isRetryableSlackError(code) {
+		return fmt.Errorf("%w: %s", ErrUnexpected, code)
+	}
+	if isAuthSlackError(code) {
+		return backoff.Permanent(fmt.Errorf("%w: %s", ErrAuth, code))
+	}
+	if code == "channel_not_found" {
+		return backoff.Permanent(fmt.Errorf("%w: %s", ErrChannelMissing, code))
+	}
+	return backoff.Permanent(fmt.Errorf("%w: %s", ErrUnexpected, code))
 }
 
 func isRetryableSlackError(code string) bool {

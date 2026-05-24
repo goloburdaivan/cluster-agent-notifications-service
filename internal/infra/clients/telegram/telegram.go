@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -116,60 +115,65 @@ func (c *telegramClient) SendMessage(
 	var lastErr error
 
 	for i := 0; i < c.maxRetries; i++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
-		if err != nil {
-			return fmt.Errorf("create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			if waitErr := c.waitBackoff(ctx, time.Duration(1<<i)*time.Second); waitErr != nil {
-				return waitErr
-			}
-			continue
-		}
-
-		statusCode, apiErr := c.readResponse(resp)
-
-		if apiErr == nil {
+		lastErr = c.doSendAttempt(ctx, url, body)
+		if lastErr == nil {
 			return nil
 		}
 
-		lastErr = apiErr
-
-		if errors.Is(apiErr, ErrUnauthorized) {
-			return apiErr
+		if errors.Is(lastErr, ErrUnauthorized) {
+			return lastErr
 		}
 
-		if errors.Is(apiErr, ErrRateLimit) {
-			backoff := c.rateLimitBackoff
-			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
-				if seconds, parseErr := strconv.Atoi(retryAfter); parseErr == nil {
-					backoff = time.Duration(seconds) * time.Second
-				}
-			}
-			if waitErr := c.waitBackoff(ctx, backoff); waitErr != nil {
-				return waitErr
-			}
-			continue
-		}
-
-		if statusCode >= 400 && statusCode < 500 {
-			break
-		}
-
-		if waitErr := c.waitBackoff(ctx, time.Duration(1<<i)*time.Second); waitErr != nil {
+		waitDuration := c.retryDelay(ctx, lastErr, i)
+		if waitErr := c.waitBackoff(ctx, waitDuration); waitErr != nil {
 			return waitErr
+		}
+
+		if isClientError(lastErr) {
+			break
 		}
 	}
 
 	return fmt.Errorf("failed after %d retries: %w", c.maxRetries, lastErr)
 }
 
+func (c *telegramClient) doSendAttempt(ctx context.Context, url string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	_, apiErr := c.readResponse(resp)
+	return apiErr
+}
+
+func (c *telegramClient) retryDelay(ctx context.Context, err error, attempt int) time.Duration {
+	if errors.Is(err, ErrRateLimit) {
+		return c.rateLimitBackoff
+	}
+	return time.Duration(1<<attempt) * time.Second
+}
+
+type clientError struct {
+	err error
+}
+
+func (e *clientError) Error() string { return e.err.Error() }
+func (e *clientError) Unwrap() error { return e.err }
+
+func isClientError(err error) bool {
+	var ce *clientError
+	return errors.As(err, &ce)
+}
+
 func (c *telegramClient) readResponse(resp *http.Response) (statusCode int, err error) {
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	statusCode = resp.StatusCode
 	respBody, _ := io.ReadAll(resp.Body)
@@ -187,6 +191,9 @@ func (c *telegramClient) readResponse(resp *http.Response) (statusCode int, err 
 	case http.StatusUnauthorized:
 		return statusCode, fmt.Errorf("%w: %s", ErrUnauthorized, apiResp.Description)
 	default:
+		if statusCode >= 400 && statusCode < 500 {
+			return statusCode, &clientError{err: fmt.Errorf("%w: %d %s", ErrUnexpectedStatus, statusCode, apiResp.Description)}
+		}
 		return statusCode, fmt.Errorf("%w: %d %s", ErrUnexpectedStatus, statusCode, apiResp.Description)
 	}
 }
